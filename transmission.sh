@@ -67,13 +67,16 @@ shift $(( OPTIND - 1 ))
 
 [[ "${TZ:-""}" ]] && timezone "$TZ"
 [[ "${USERID:-""}" =~ ^[0-9]+$ ]] && usermod -u $USERID debian-transmission
-[[ "${GROUPID:-""}" =~ ^[0-9]+$ ]] && usermod -g $GROUPID debian-transmission
+[[ "${GROUPID:-""}" =~ ^[0-9]+$ ]] && groupmod -g $GROUPID debian-transmission
 
+[[ -e $dir/info/settings.json ]] || cp /etc/transmission-daemon/settings.json $dir/info/settings.json
 [[ -d $dir/downloads ]] || mkdir -p $dir/downloads
 [[ -d $dir/incomplete ]] || mkdir -p $dir/incomplete
 [[ -d $dir/info/blocklists ]] || mkdir -p $dir/info/blocklists
 
-chown -Rh debian-transmission. $dir 2>&1 | grep -iv 'Read-only' || :
+chown -RH debian-transmission. $dir 2>&1 | grep -iv 'Read-only' || :
+
+chmod o+rw /etc/transmission-daemon/
 
 if [[ $# -ge 1 && -x $(which $1 2>&-) ]]; then
     exec "$@"
@@ -83,20 +86,25 @@ elif [[ $# -ge 1 ]]; then
 elif ps -ef | egrep -v 'grep|transmission.sh' | grep -q transmission; then
     echo "Service already running, please restart container to apply changes"
 else
-    url='http://list.iblocklist.com'
-    curl -Ls "$url"'/?list=bt_level1&fileformat=p2p&archiveformat=gz' |
-                gzip -cd > $dir/info/blocklists/bt_level1
-    chown debian-transmission. $dir/info/blocklists/bt_level1
-    grep -q peer-socket-tos $dir/info/settings.json ||
-        sed -i '/"peer-port"/a \
-    "peer-socket-tos": "lowcost",' $dir/info/settings.json
-    sed -i '/"queue-stalled-enabled"/s/:.*/: true,/' $dir/info/settings.json
-    sed -i '/"speed-limit-up"/s/:.*/: 10,/' $dir/info/settings.json
-    sed -i '/"speed-limit-up-enabled"/s/:.*/: true,/' $dir/info/settings.json
+    #grep -q peer-socket-tos $dir/info/settings.json ||
+        #sed -i '/"peer-port"/a \
+    #"peer-socket-tos": "lowcost",' $dir/info/settings.json
+    #sed -i '/"queue-stalled-enabled"/s/:.*/: true,/' $dir/info/settings.json
+    #sed -i '/"speed-limit-up"/s/:.*/: 10,/' $dir/info/settings.json
+    #sed -i '/"speed-limit-up-enabled"/s/:.*/: true,/' $dir/info/settings.json
+    #sed -i '/"speed-limit-up-enabled"/s/:.*/: true,/' $dir/info/settings.json
+
+    sed -i "/\"peer-port\"/s/:.*/: ${PEER_PORT:-51413},/" $dir/info/settings.json
+
+    grep -q rpc-url $dir/info/settings.json ||
+      sed -i "/\"rpc-port\"/a \"rpc-url\": \"${RPC_URL:-transmission}\"," $dir/info/settings.json
+
+    grep -q blocklist-url $dir/info/settings.json ||
+      sed -i '/"blocklist-enabled"/a "blocklist-url": "http://john.bitsurge.net/public/biglist.p2p.gz",' $dir/info/settings.json
+
     exec su -l debian-transmission -s /bin/bash -c "exec transmission-daemon \
                 --config-dir $dir/info --blocklist --encryption-preferred \
-                --log-error -e /dev/stdout --global-seedratio 2.0 --dht \
-                --incomplete-dir $dir/incomplete --paused --auth --foreground \
-                --username '${TRUSER:-admin}' --password '${TRPASSWD:-admin}' \
+                --log-info --global-seedratio 0.0 --dht \
+                --incomplete-dir $dir/incomplete --paused --no-auth --foreground \
                 --download-dir $dir/downloads --no-portmap --allowed \\* 2>&1"
 fi

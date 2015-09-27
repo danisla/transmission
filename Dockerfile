@@ -18,6 +18,9 @@ RUN export DEBIAN_FRONTEND='noninteractive' && \
     rm -rf /var/lib/apt/lists/* /tmp/*
 COPY transmission.sh /usr/bin/
 
+ADD ipcheck/ipcheck.js /usr/share/transmission/web/javascript/ipcheck.js
+ADD ipcheck/index.html /usr/share/transmission/web/index.html 
+
 VOLUME ["/run", "/tmp", "/var/cache", "/var/lib", "/var/log", "/var/tmp"]
 
 EXPOSE 9091 51413/tcp 51413/udp
