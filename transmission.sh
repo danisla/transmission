@@ -67,7 +67,13 @@ shift $(( OPTIND - 1 ))
 
 [[ "${TZ:-""}" ]] && timezone "$TZ"
 [[ "${USERID:-""}" =~ ^[0-9]+$ ]] && usermod -u $USERID debian-transmission
-[[ "${GROUPID:-""}" =~ ^[0-9]+$ ]] && groupmod -g $GROUPID debian-transmission
+if [[ "${GROUPID:-""}" =~ ^[0-9]+$ ]]; then
+  curr_group=$(getent group ${GROUPID})
+  if [[ $? -eq 0 ]]; then
+    groupdel ${curr_group%%:*}
+  fi
+  groupmod -g $GROUPID debian-transmission
+fi
 
 [[ -e $dir/info/settings.json ]] || cp /etc/transmission-daemon/settings.json $dir/info/settings.json
 [[ -d $dir/downloads ]] || mkdir -p $dir/downloads
